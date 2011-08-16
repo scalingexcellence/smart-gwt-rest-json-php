@@ -1,0 +1,15 @@
+php/.idea
+gwt/war/*
+gwt/.gwt
+gwt/.settings
+
+
+templates_c/*
+!templates_c/index.html
+cache/*
+!cache/index.html
+*/~
+*.pyc
+public_html/qrcodes/*.png
+public_html/qrcodes/*.dat
+services/server_config.php

@@ -1,0 +1,4 @@
+A php library providing a JSON API compatible with Smart GWT's RestDataSource.
+
+Code license: GNU Lesser GPL
+Labels: GWT, PHP, widgets, databinding 
