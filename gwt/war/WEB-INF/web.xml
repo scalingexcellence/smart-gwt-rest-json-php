@@ -24,7 +24,7 @@
     </init-param>
     <init-param>
       <param-name>proxyPath</param-name>
-      <param-value>/websites/smartgwt-rest-json-php/php/</param-value>
+      <param-value>/smart-gwt-rest-json-php/php/</param-value>
     </init-param>
     <init-param>
       <param-name>maxFileUploadSize</param-name>
