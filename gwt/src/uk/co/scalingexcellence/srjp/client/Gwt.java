@@ -65,7 +65,7 @@ public class Gwt implements EntryPoint {
 		dataSource.setFields(pkField, itemNameField, descriptionField, categoryField, unitsField, unitCostField, inStockField, nextShipmentField);
 
 		// dataSource.setDataURL("proxy/supplyItem.data.xml");
-		dataSource.setDataURL("proxy/items.json");
+		dataSource.setDataURL("api/mem");
 		// dataSource.setClientOnly(true);
 
 		// Main table
@@ -86,7 +86,7 @@ public class Gwt implements EntryPoint {
 		parentField.setForeignKey("supplyCategoryDS.categoryName");
 
 		supply.setFields(itemNameField2, itemNameField3, parentField);
-		supply.setDataURL("proxy/supply.json");
+		supply.setDataURL("api/mem");
 		
 		//supply.setDataProtocol(DSProtocol.POSTPARAMS);
 		
