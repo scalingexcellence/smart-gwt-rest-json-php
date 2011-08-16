@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE web-app
+    PUBLIC "-//Sun Microsystems, Inc.//DTD Web Application 2.3//EN"
+    "http://java.sun.com/dtd/web-app_2_3.dtd">
+
+<web-app>
+  
+  <!-- Default page to serve -->
+  <welcome-file-list>
+    <welcome-file>Gwt.html</welcome-file>
+  </welcome-file-list>
+  
+  <!-- Configure ProxyServlet -->
+  <servlet>
+    <servlet-name>ProxyServlet</servlet-name>
+    <servlet-class>net.edwardstx.ProxyServlet</servlet-class>
+    <init-param>
+      <param-name>proxyHost</param-name>
+      <param-value>localhost</param-value>
+    </init-param>
+    <init-param>
+      <param-name>proxyPort</param-name>
+      <param-value>80</param-value>
+    </init-param>
+    <init-param>
+      <param-name>proxyPath</param-name>
+      <param-value>/websites/smartgwt-rest-json-php/php/</param-value>
+    </init-param>
+    <init-param>
+      <param-name>maxFileUploadSize</param-name>
+      <param-value></param-value>
+    </init-param>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>ProxyServlet</servlet-name>
+    <url-pattern>/api/*</url-pattern>
+  </servlet-mapping>
+  
+</web-app>
