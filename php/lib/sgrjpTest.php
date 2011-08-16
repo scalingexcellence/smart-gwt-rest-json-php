@@ -63,7 +63,7 @@ class sgrjpTest extends PHPUnit_Framework_TestCase
         foreach ($urls as $u) {
             $p = new default_target();
             $x = $this->t->toSql($this->t->array_to_request_object($this->t->url_encoding_to_array($u)), $p);
-            echo "URL: ".$u.", QUERY: 'SELECT * FROM `whatever` " . implode(" ", $x) . "', FIELDS: " . implode($p->list, ",") . "\n";
+            echo "URL: ".$u.", QUERY: '".$x."', FIELDS: " . implode($p->list, ",") . "\n";
         }
     }
 

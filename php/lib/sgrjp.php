@@ -21,6 +21,9 @@
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
 
+/**
+ * A default targete class for the 'toSql' method of sgrjp.
+ */
 class default_target {
     public $list = array();
     public function escape($q) { return $q; }
@@ -474,24 +477,24 @@ class sgrjp
                     //MySQL comparison is always case insensitive (!)
                     if ($set_field)
                         //Case field
-                        $qr = "`".$ob->fieldName."` ".$op." `".$ob->value."`";
+                        $qr = "`".$p->escape($ob->fieldName)."` ".$op." `".$p->escape($ob->value)."`";
                     elseif (!is_numeric($ob->value) || $case_insensitive || $startm!="" || $endm!="")
                         //Case string
-                        $qr = "`".$ob->fieldName."` ".$op." '".$startm.$p->escape($ob->value).$endm."'";
+                        $qr = "`".$p->escape($ob->fieldName)."` ".$op." '".$startm.$p->escape($ob->value).$endm."'";
                     else
                         //Case number
-                        $qr = "`".$ob->fieldName."` ".$op." ".$ob->value;
+                        $qr = "`".$p->escape($ob->fieldName)."` ".$op." ".$ob->value;
 
                     return ($set_not?"NOT (":"") . $qr . ($set_not?")":"");
                     
                 case "isNull":
-                    return ($set_not?"NOT (":"") . "ISNULL(`".$ob->fieldName."`)" . ($set_not?")":"");
+                    return ($set_not?"NOT (":"") . "ISNULL(`".$p->escape($ob->fieldName)."`)" . ($set_not?")":"");
 
                 case "between":
                 case "betweenInclusive":
                     $lt = $ob->operator=="betweenInclusive" ? "<=" : "<";
                     $gt = $ob->operator=="betweenInclusive" ? ">=" : ">";
-                    return ($set_not?"NOT (":"") . "((`".$ob->fieldName."`".$gt." ".$ob->start.") AND (`".$ob->fieldName."`".$lt." ".$ob->end."))" . ($set_not?")":"");
+                    return ($set_not?"NOT (":"") . "((`".$p->escape($ob->fieldName)."`".$gt." ".$ob->start.") AND (`".$p->escape($ob->fieldName)."`".$lt." ".$ob->end."))" . ($set_not?")":"");
 
                 case "regexp":
                     throw new Exception("regexp not supported.");
@@ -508,9 +511,12 @@ class sgrjp
      * @throws Exception Invalid request type or other problem
      * @param $ob The erquest object
      * @param $p An object exposing the parameters interface with two methods: 'escape' and 'pushField'
-     * @return array The SQL statement
+     * @param string $table The table to operate on
+     * @param string $primary_key The primary key for this table (necessary for every operation other than fetch)
+     * @param array $fields Array with the fields to return (defaults to '*')
+     * @return string The SQL query string
      */
-    public function toSql($ob, &$p) {
+    public function toSql($ob, &$p, $table = "users", $primary_key = "id", $fields = array("*")) {
         if ($ob->operationType != "fetch") {
             throw new Exception("Only fetch is supported right now");
         }
@@ -547,6 +553,12 @@ class sgrjp
             }
         }
 
-        return array($where, $order, $limit);
+        //Escape fields
+        $t_fields = array();
+        foreach ($fields as $f) {
+            $t_fields[] = '`'.$p->escape($f).'`';
+        }
+
+        return "SELECT " . implode($t_fields,',') . " FROM `" . $p->escape($table) . "` " . $where . " " . $order . " " . $limit;
     }
 }
