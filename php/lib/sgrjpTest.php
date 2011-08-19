@@ -46,6 +46,10 @@ class sgrjpTest extends PHPUnit_Framework_TestCase
      * Tests a few URLs
      */
     public function testUrlEncodingToArray() {
+
+
+
+        /*
         $urls = array(
             "_constructor=AdvancedCriteria&operator=and&criteria=%7B%22fieldName%22%3A%22categoryName%22%2C%22operator%22%3A%22iStartsWith%22%2C%22value%22%3A%22abc%22%7D&criteria=%7B%22fieldName%22%3A%22volume%22%2C%22operator%22%3A%22lessThan%22%2C%22value%22%3A12%7D&__gwt_ObjectId=11991&_operationType=fetch&_startRow=15&_endRow=28&_sortBy=categoryName&_textMatchStyle=substring&_componentId=isc_Gwt_1_0&_dataSource=supplyCategoryDS&isc_metaDataPrefix=_&isc_dataFormat=json",
             "_constructor=AdvancedCriteria&operator=and&criteria=%7B%22fieldName%22%3A%22categoryName%22%2C%22operator%22%3A%22iStartsWith%22%2C%22value%22%3A%22abc%22%7D&criteria=%7B%22fieldName%22%3A%22volume%22%2C%22operator%22%3A%22lessThan%22%2C%22value%22%3A12%7D&__gwt_ObjectId=11991&_operationType=fetch&_startRow=15&_endRow=28&_sortBy=-volume&_sortBy=categoryName&_textMatchStyle=substring&_componentId=isc_Gwt_1_0&_dataSource=supplyCategoryDS&isc_metaDataPrefix=_&isc_dataFormat=json",
@@ -61,10 +65,11 @@ class sgrjpTest extends PHPUnit_Framework_TestCase
         );
 
         foreach ($urls as $u) {
-            $p = new default_target();
-            $x = $this->t->toSql($this->t->array_to_request_object($this->t->url_encoding_to_array($u)), $p);
-            echo "URL: ".$u.", QUERY: '".$x."', FIELDS: " . implode($p->list, ",") . "\n";
+            $x = $this->t->arrayToRequestObject($this->t->urlEncodingToArray($u));
+            echo "URL: ".$u."\nQUERY:\n";
+            print_r($x);
         }
+        */
     }
 
     /**

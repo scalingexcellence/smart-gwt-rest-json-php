@@ -1,6 +1,7 @@
 package uk.co.scalingexcellence.srjp.client;
 
 import com.google.gwt.core.client.EntryPoint;
+import com.google.gwt.user.client.Window;
 import com.smartgwt.client.data.AdvancedCriteria;
 import com.smartgwt.client.data.DataSource;
 import com.smartgwt.client.data.RestDataSource;
@@ -11,9 +12,11 @@ import com.smartgwt.client.data.fields.DataSourceFloatField;
 import com.smartgwt.client.data.fields.DataSourceTextField;
 import com.smartgwt.client.types.Alignment;
 import com.smartgwt.client.types.DSDataFormat;
+import com.smartgwt.client.types.DSProtocol;
 import com.smartgwt.client.types.ListGridEditEvent;
 import com.smartgwt.client.types.OperatorId;
 import com.smartgwt.client.types.RowEndEditAction;
+import com.smartgwt.client.widgets.Button;
 import com.smartgwt.client.widgets.Canvas;
 import com.smartgwt.client.widgets.IButton;
 import com.smartgwt.client.widgets.events.ClickEvent;
@@ -28,14 +31,64 @@ import com.smartgwt.client.widgets.layout.VLayout;
 import com.smartgwt.client.widgets.layout.VStack;
 
 public class Gwt implements EntryPoint {
+	
+	private class MHLayout extends HLayout {
+    	public void addButton(String label, ClickHandler ch) {
+            Button db = new Button(label);
+            db.addClickHandler(ch);
+            this.addMember(db);
+    	}
+	}
+	
+	private HLayout createMenu(final ListGrid table) {
+		MHLayout options = new MHLayout();        
+        options.setWidth100();
+        options.setHeight(26);
+        
+        options.addButton("New", new ClickHandler() {
+            public void onClick(ClickEvent event) {
+                table.startEditingNew();
+            }
+        });
+        
+        options.addButton("Delete", new ClickHandler() {
+            public void onClick(ClickEvent event) {
+                if (Window.confirm("Are you sure you want to permantly delete those entries now?")) {
+                    table.removeSelectedData();
+                }
+            }
+        });
+        
+        options.addButton("Save", new ClickHandler() {
+            public void onClick(ClickEvent event) {
+                table.saveAllEdits();
+            }
+        });
 
+        options.addButton("Undo", new ClickHandler() {
+            public void onClick(ClickEvent event) {
+                if (Window.confirm("Are you sure you want to discard your edits now?")) {
+                    table.discardAllEdits();
+                }
+            }
+        });
+        
+        options.addButton("Refresh", new ClickHandler() {
+            public void onClick(ClickEvent event) {
+            	table.invalidateCache();
+            }
+        });
+        
+        return options;
+	}
+	
+	
 	public void onModuleLoad() {
 
 		// Nested table
 		final RestDataSource dataSource = new RestDataSource();
 		dataSource.setID("ItemsDs");
 		dataSource.setDataFormat(DSDataFormat.JSON);
-		// dataSource.setRecordXPath("/List/supplyItem");
 
 		DataSourceTextField itemNameField = new DataSourceTextField("itemName", "Item", 128, true);
 		DataSourceTextField pkField = new DataSourceTextField("SKU", "SKU", 10, true);
@@ -59,25 +112,16 @@ public class Gwt implements EntryPoint {
 
 		unitCostField.setValidators(rangeValidator, precisionValidator);
 
-		DataSourceBooleanField inStockField = new DataSourceBooleanField("inStock", "In Stock");
-		DataSourceDateField nextShipmentField = new DataSourceDateField("nextShipment", "Next Shipment");
-
-		dataSource.setFields(pkField, itemNameField, descriptionField, categoryField, unitsField, unitCostField, inStockField, nextShipmentField);
-
-		// dataSource.setDataURL("proxy/supplyItem.data.xml");
-		dataSource.setDataURL("api/mem");
-		// dataSource.setClientOnly(true);
+		dataSource.setFields(pkField, itemNameField, descriptionField, categoryField, unitsField, unitCostField);
+		dataSource.setDataURL("api/");
 
 		// Main table
 		final RestDataSource supply = new RestDataSource();
 		supply.setID("supplyCategoryDS");
-		// supply.setRecordXPath("/List/supplyCategory");
 		supply.setDataFormat(DSDataFormat.JSON);
 
 		DataSourceTextField itemNameField2 = new DataSourceTextField("categoryName", "Item", 128, true);
 		itemNameField2.setPrimaryKey(true);
-		
-		DataSourceFloatField itemNameField3 = new DataSourceFloatField( "volume", "Volume", 5);
 		
 		DataSourceTextField parentField = new DataSourceTextField("parentID", null);
 		parentField.setHidden(true);
@@ -85,13 +129,13 @@ public class Gwt implements EntryPoint {
 		parentField.setRootValue("root");
 		parentField.setForeignKey("supplyCategoryDS.categoryName");
 
-		supply.setFields(itemNameField2, itemNameField3, parentField);
-		supply.setDataURL("api/mem");
-		
+		supply.setFields(itemNameField2, parentField);
+		supply.setDataURL("api/");
+
+		//Enable POST data
+		//dataSource.setDataProtocol(DSProtocol.POSTPARAMS);
 		//supply.setDataProtocol(DSProtocol.POSTPARAMS);
 		
-		// supply.setDataURL("proxy/supplyCategory.data.xml");
-		// supply.setClientOnly(true);
 
 		//final TreeGrid listGrid = new TreeGrid() {
 		final ListGrid listGrid = new ListGrid() {
@@ -116,9 +160,9 @@ public class Gwt implements EntryPoint {
 
 				countryGrid.setCanEdit(true);
 				countryGrid.setModalEditing(true);
-				countryGrid.setEditEvent(ListGridEditEvent.CLICK);
+				countryGrid.setEditEvent(ListGridEditEvent.DOUBLECLICK);
 				countryGrid.setListEndEditAction(RowEndEditAction.NEXT);
-				countryGrid.setAutoSaveEdits(false);
+				//countryGrid.setAutoSaveEdits(false);
 
 				layout.addMember(countryGrid);
 
@@ -171,6 +215,12 @@ public class Gwt implements EntryPoint {
 		listGrid.setDataPageSize(5);
 		listGrid.setDrawAllMaxCells(5);
 		
+		listGrid.setCanEdit(true);
+		listGrid.setModalEditing(true);
+		listGrid.setEditEvent(ListGridEditEvent.DOUBLECLICK);
+		listGrid.setListEndEditAction(RowEndEditAction.NEXT);
+		listGrid.setAutoSaveEdits(false);
+		
 
 		//final FilterBuilder filterBuilder = new FilterBuilder();
 		//filterBuilder.setDataSource(supply);
@@ -198,6 +248,7 @@ public class Gwt implements EntryPoint {
 		VStack vStack = new VStack(10);
 		vStack.addMember(filterBuilder);
 		vStack.addMember(filterButton);
+		vStack.addMember(createMenu(listGrid));
 		vStack.addMember(listGrid);
 
 		vStack.draw();

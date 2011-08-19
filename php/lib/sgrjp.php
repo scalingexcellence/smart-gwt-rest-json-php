@@ -21,13 +21,178 @@
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
 
-/**
- * A default targete class for the 'toSql' method of sgrjp.
- */
-class default_target {
-    public $list = array();
-    public function escape($q) { return $q; }
-    public function pushField($q) { if (!in_array($q,$this->list)) {$this->list[]=$q;} }
+
+class sgrjp_request {
+    /**
+     * @var int The beginning of the results to return
+     */
+    public $startRow = 0;
+
+    /**
+     * @var int The end of the results to return
+     */
+    public $endRow = -1;
+
+    /**
+     * @var string The type of the operation (fetch, update etc.)
+     */
+    public $operationType = "";
+
+    /**
+     * @var string The datasource
+     */
+    public $ds = "";
+
+    /**
+     * @var array The sort criteria (key=>value), key is the fieldName, value = ASC/DESC
+     */
+    public $sort = array();
+
+    /**
+     * @var array The oldvalues object, used for update requests
+     */
+    public $oldValues = array();
+
+    /**
+     * @var stdClass The query object with the constraints
+     */
+    public $query = null;
+
+    /**
+     * @var array Key-Value pairs directly on the request objects. Those are either constraints or values to add/update.
+     */
+    public $fields = array();
+
+    /**
+     * @var string The type of matching for the free fields
+     */
+    public $textMatchStyle = null;
+
+    /**
+     * Conversts key-value pairs to search criteria/constraings
+     * @static
+     * @param $kv The array of key-value pairs
+     * @param $op string The operator for those fields
+     * @return stdClass A query constraints object
+     */
+    public static function convertArrayToCriteria($kv, $op = "iEquals") {
+        $ob = new stdClass();
+        $ob->criteria = array();
+        $ob->operator = "and";
+        $ob->_constructor = "AdvancedCriteria";
+        foreach ($kv as $k=>$v) {
+            $tmp = new stdClass();
+            $tmp->fieldName = $k;
+            $tmp->operator = $op;
+            $tmp->value = $v;
+            $ob->criteria[] = $tmp;
+        }
+        return $ob;
+    }
+
+    /**
+     * Merges existing criteria with an array of new criteria (on an and- manner)
+     * @param array $qr The criteria to merge with
+     */
+    public function mergeCriteria($qr) {
+        //Do we have to merge?
+        if (!$qr || !property_exists($qr, "criteria") || count($qr->criteria)<=0 || !property_exists($qr, "operator") || $qr->operator != "and") {
+            return;
+        }
+
+        //If there was an advanced 'and' type query, then we can merge.
+        if ($this->query && property_exists($this->query, "operator") && $this->query->operator=="and") {
+            $this->query->criteria = array_merge($this->query->criteria, $qr->criteria);
+        }
+        else {
+            //if there existed a 'top-level' criteria then we append it
+            if ($this->query && property_exists($this->query, "operator")) {
+                $qr->criteria[] = $this->query;
+            }
+            $this->query = $qr;
+        }
+    }
+
+    /**
+     * Transforms operations to the primitives returning some of their properties
+     * @static
+     * @param $op The operation name
+     * @return array Array containing the simplified operation, if it's case insensitive, if negation, or if it compares with field
+     */
+    public static function mapOp($op) {
+        //Map case insensitive cases
+        $case_insensitive = false;
+        if (strpos($op, "i") === 0 && $op != "isNull" && $op != "inSet") {
+            $op = strtolower(substr($op, 1, 1)) . substr($op, 2);
+            $case_insensitive = true;
+        }
+
+        //Map not cases
+        $set_not = false;
+        $transforms = array("notEqual" => "equals", "notContains" => "contains", "notStartsWith" => "startsWith", "notEndsWith" => "endsWith", "notInSet" => "inSet", "notEqualField" => "equalsField", "notNull" => "isNull");
+        if (isset($transforms[$op])) {
+            $set_not = true;
+            $op = $transforms[$op];
+        }
+
+        //Map field cases
+        $set_field = false;
+        $transforms = array("equalsField" => "equals", "greaterThanField" => "greaterThan", "lessThanField" => "lessThan", "greaterOrEqualField" => "greaterOrEqual", "lessOrEqualField" => "lessOrEqual", "containsField" => "contains", "startsWithField" => "startsWith", "endsWithField" => "endsWith");
+        if (isset($transforms[$op])) {
+            $set_field = true;
+            $op = $transforms[$op];
+        }
+        return array($op, $case_insensitive, $set_not, $set_field);
+    }
+
+    /**
+     * Validates part of a query object and updates its fields
+     * @throws Exception Invalid query object
+     * @param $ob The request query object
+     * @return string The SQL query
+     */
+    private function mGetFields($ob) {
+        $t = array();
+
+        //Empty query
+        if (!$ob || !property_exists($ob, "operator")) {
+            return $t;
+        }
+
+        if (property_exists($ob, "criteria")) {
+            foreach ($ob->criteria as $k) {
+                $t = array_merge($t, $this->mGetFields($k));
+            }
+            return $t;
+        }
+        else {
+            // Simple queries
+            if (!property_exists($ob, "fieldName")) {
+                throw new Exception("Unexpected query object type (missing fieldName)");
+            }
+
+            list($op, $case_insensitive, $set_not, $set_field) = sgrjp_request::mapOp($ob->operator);
+
+            //Set the required fields
+            if (!in_array($ob->fieldName,$t)) {$t[]=$ob->fieldName;}
+            if ($set_field) {
+                if (!property_exists($ob, "value")) {
+                    throw new Exception("Unexpected query object type (missing value)");
+                }
+                if (!in_array($ob->value,$t)) {$t[]=$ob->value;}
+            }
+            return $t;
+        }
+    }
+
+    /**
+     * Validates and returns the fields of the request object
+     * @throws Exception Invalid request type or other problem
+     * @return Array The array of fields used from this query
+     */
+    public function getFields() {
+        return $this->mGetFields($this->query);
+    }
 }
 
 class sgrjp
@@ -61,7 +226,7 @@ class sgrjp
      * @param array $vars Original array of variables. If set, the new variables are going to be appended to this string
      * @return array Returns the array of values in $var
      */
-    public function url_encoding_to_array($var, $vars = array())
+    public function urlEncodingToArray($var, $vars = array())
     {
         $pairs = explode("&", $var);
         foreach ($pairs as $pair) {
@@ -98,14 +263,14 @@ class sgrjp
      * Processes post and and get variables to an array
      * @return stdClass The values contained in that array
      */
-    public function decode_post_and_get()
+    public function decodePostAndGet()
     {
         $v = array();
         if (preg_match("/\?(.*)/", $_SERVER['REQUEST_URI'], $_matches)) {
-            $v = $this->url_encoding_to_array($_matches[1], $v);
+            $v = $this->urlEncodingToArray($_matches[1], $v);
         }
-        $v = $this->url_encoding_to_array(file_get_contents("php://input"), $v);
-        return $this->array_to_request_object($v);
+        $v = $this->urlEncodingToArray(file_get_contents("php://input"), $v);
+        return $this->arrayToRequestObject($v);
     }
 
     /**
@@ -128,9 +293,9 @@ class sgrjp
     /**
      * @throws Exception Throws an exception if the format is not supported etc.
      * @param $ar The array with the parameters
-     * @return stdClass The decoded object
+     * @return array The decoded object and the array of fields for this object
      */
-    public function array_to_request_object($ar)
+    public function arrayToRequestObject($ar)
     {
         //Pre-process very meta-data
         foreach ($ar as $k => $v) {
@@ -149,9 +314,27 @@ class sgrjp
         }
 
         //Setting up query object
-        $ob = new stdClass();
-        $ob->startRow = 0;
-        $ob->endRow = -1;
+        $ob = new sgrjp_request();
+
+        //Detect operation type
+        $xf = $this->metaDataPrefix."operationType";
+        if (isset($ar[$xf])) {
+            $ob->operationType = $ar[$xf];
+            unset($ar[$xf]);
+        }
+        else {
+            throw new Exception("Invalid operation. operationType is missing");
+        }
+
+        //Detect data source
+        $xf = $this->metaDataPrefix."dataSource";
+        if (isset($ar[$xf])) {
+            $ob->ds = $ar[$xf];
+            unset($ar[$xf]);
+        }
+        else {
+            throw new Exception("Invalid operation. DataSource is missing");
+        }
 
         //Detect startRow
         $xf = $this->metaDataPrefix."startRow";
@@ -167,23 +350,9 @@ class sgrjp
             unset($ar[$xf]);
         }
 
-        //Discard component id
-        $xf = $this->metaDataPrefix."componentId";
-        if (isset($ar[$xf])) {
-            unset($ar[$xf]);
-        }
-
-        //Detect operation type
-        $xf = $this->metaDataPrefix."operationType";
-        if (isset($ar[$xf])) {
-            $ob->operationType = $ar[$xf];
-            unset($ar[$xf]);
-        }
-
         //Detect sorting
         $xf = $this->metaDataPrefix."sortBy";
         if (isset($ar[$xf])) {
-            $ob->sort = array();
             foreach ($ar[$xf] as $k) {
                 $v = "ASC";
                 if (strpos($k, "-")===0) {
@@ -198,22 +367,31 @@ class sgrjp
             unset($ar[$xf]);
         }
 
-        //Detect data source
-        $xf = $this->metaDataPrefix."dataSource";
+        //Detect the oldValues and store as an array with key-value pairs
+        $xf = $this->metaDataPrefix."oldValues";
         if (isset($ar[$xf])) {
-            $ob->ds = $ar[$xf];
+            $tmp = (array)json_decode($ar[$xf]);
+            unset($tmp["__gwt_ObjectId"]);
+            unset($tmp["\$29a"]);
+            unset($tmp["expanded"]);
+            unset($tmp["hasExpansionComponent"]);
+            foreach ($tmp as $k=>$v) {
+                if (strpos($k, $this->metaDataPrefix)!==0 && !preg_match("/^isc_/", $k)) {
+                    $ob->oldValues[$k] = $v;
+                }
+            }
             unset($ar[$xf]);
         }
 
-        //Discard text match style
-        $xf = $this->metaDataPrefix."textMatchStyle";
-        if (isset($ar[$xf])) {
+        //Discard component id, match style, selection_2
+        foreach (array("componentId"=>true, "selection_2"=>true, "\$29a"=> false, "expanded"=> false, "hasExpansionComponent"=> false) as $k=>$v) {
+            $xf = $v ? $this->metaDataPrefix.$k : $k;
             unset($ar[$xf]);
         }
 
         //Parse query
-        $ob->query = new stdClass();
         if (isset($ar["criteria"])) {
+            $ob->query = new stdClass();
             if (!isset($ar["operator"])) {
                 throw new Exception("Found criteria but not operator!");
             }
@@ -228,49 +406,20 @@ class sgrjp
             unset($ar[$this->metaDataPrefix."constructor"]);
         }
 
+        // Detect the textMatchStyle
+        $xf = $this->metaDataPrefix."textMatchStyle";
+        if (isset($ar[$xf])) {
+            $ob->textMatchStyle = $ar[$xf];
+            unset($ar[$xf]);
+        }
+
         //All the non-meta characters become criteria
-        $to_remove = array();
-        $extra_criteria  = array();
         foreach ($ar as $k=>$v) {
             if (strpos($k, $this->metaDataPrefix)!==0) {
-                $tmp = new stdClass();
-                $tmp->fieldName = $k;
-                $tmp->operator = "iEquals";
-                $tmp->value = $v;
-                $extra_criteria[] = $tmp;
-                $to_remove[$k] = 1;
+                $ob->fields[$k] = $v;
             }
         }
-        $ar = array_diff_key($ar, $to_remove);
-
-        //We have to merge...
-        if (count($extra_criteria)>0) {
-            //If there was an advanced 'and' type query, then we can merge.
-            if (property_exists($ob->query, "operator") && $ob->query->operator=="and") {
-                $ob->query->criteria = array_merge($ob->query->criteria, $extra_criteria);
-            }
-            else {
-                //else, we have to create a new 'top-level' criteria
-                $tmp = new stdClass();
-                $tmp->criteria = $extra_criteria;
-                $tmp->operator = "and";
-                $tmp->_constructor = "AdvancedCriteria";
-                //if there existed a 'top-level' criteria then we append it
-                if (property_exists($ob->query, "operator")) {
-                    $tmp->criteria[] = $ob->query;
-                }
-                $ob->query = $tmp;
-            }
-        }
-
-        //Do some sanity test and validation to the request object
-        if (!property_exists($ob, "ds")) {
-            throw new Exception("Invalid operation. DataSource is missing");
-        }
-
-        if (!property_exists($ob, "operationType")) {
-            throw new Exception("Invalid operation. operationType is missing");
-        }
+        $ar = array_diff_key($ar, $ob->fields);
 
         //Should have parsed all the elements of $ar by now.
         if (count($ar)!=0) {
@@ -335,230 +484,17 @@ class sgrjp
 
     /**
      * Returns a ResultSet
-     * @param $arr The array with the data
-     * @param $start Starting row
-     * @param $total Total number of entries
+     * @param array $ob The array with the data
+     * @param int $start Starting row
+     * @param int $total Total number of entries
      */
-    public function returnResult($arr,$start,$total) {
+    public function returnResult($ob, $start, $total) {
         $o = new stdClass();
         $o->response->status = 0;
-        $o->response->startRows = $start;
-        $o->response->endRow = $start + count($arr);
+        $o->response->startRow = $start;
+        $o->response->endRow = $start + count($ob);
         $o->response->totalRows = $total;
-        $o->response->data = $arr;
+        $o->response->data = $ob;
         $this->returnObject($o);
-    }
-
-    /**
-     * Parses a chunk of query (where) parameter
-     * @throws Exception Invalid query object
-     * @param $ob The request query object
-     * @param $p An object exposing the parameters interface with two methods: 'escape' and 'pushField'
-     * @return string The SQL query
-     */
-    private function parseWhere($ob, &$p) {
-        //Empty query
-        if (!property_exists($ob, "operator")) {
-            return "";
-        }
-
-        if (property_exists($ob, "criteria")) {
-            // The join engine for composite queries
-            $starts_with = "((";
-            $ends_with = "))";
-            $join_with = ") OR (";
-            switch ($ob->operator) {
-                case "and":
-                    $join_with = ") AND (";
-                    break;
-                case "or":
-                    break;
-                case "not":
-                    $starts_with = "(NOT ((";
-                    $ends_with = ")))";
-                    break;
-            }
-            $q = $starts_with;
-            $prefix = "";
-            foreach ($ob->criteria as $k) {
-                $q.= $prefix . $this->parseWhere($k, $p);
-                $prefix = $join_with;
-            }
-            return $q . $ends_with;
-        }
-        else {
-            // Simple queries
-            if (!property_exists($ob, "fieldName")) {
-                throw new Exception("Unexpected query object type (missing value)");
-            }
-
-            //Map case insensitive cases
-            $case_insensitive = false;
-            if (strpos($ob->operator, "i")===0 && $ob->operator!="isNull" && $ob->operator!="inSet") {
-                $ob->operator = strtolower(substr($ob->operator, 1, 1)) . substr($ob->operator, 2);
-                $case_insensitive = true;
-            }
-
-            //Map not cases
-            $set_not = false;
-            $transforms = array("notEqual"=>"equals","notContains"=>"contains","notStartsWith"=>"startsWith","notEndsWith"=>"endsWith","notInSet"=>"inSet","notEqualField"=>"equalsField","notNull"=>"isNull");
-            if (isset($transforms[$ob->operator])) {
-                $set_not = true;
-                $ob->operator = $transforms[$ob->operator];
-            }
-
-            //Map field cases
-            $set_field = false;
-            $transforms = array("equalsField"=>"equals","greaterThanField"=>"greaterThan","lessThanField"=>"lessThan","greaterOrEqualField"=>"greaterOrEqual","lessOrEqualField"=>"lessOrEqual","containsField"=>"contains","startsWithField"=>"startsWith","endsWithField"=>"endsWith");
-            if (isset($transforms[$ob->operator])) {
-                $set_field = true;
-                $ob->operator = $transforms[$ob->operator];
-            }
-
-            //Check parameters
-            if ($ob->operator == "between" || $ob->operator == "betweenInclusive") {
-                //Require 'start' and 'end'
-                if (!property_exists($ob, "start") || !property_exists($ob, "end")) {
-                    throw new Exception("Unexpected query object type (missing start,end)");
-                }
-                if (!is_numeric($ob->start) || !is_numeric($ob->end)) {
-                    throw new Exception("Start or end is not numeric");
-                }
-            }
-            else if ($ob->operator == "isNull") {
-                //No parameters required in this case
-            }
-            else {
-                if (!property_exists($ob, "value")) {
-                    //Every other case requires the 'value' parameter
-                    throw new Exception("Unexpected query object type (missing value)");
-                }
-                if (!$set_field && in_array($ob->operator, array("greaterThan","lessThan","greaterOrEqual","lessOrEqual"))) {
-                    if (!is_numeric($ob->value)) {
-                        throw new Exception("Value '" . $ob->value . "' is not numeric");
-                    }
-                }
-            }
-
-            //Set the required fields
-            $p->pushField($ob->fieldName);
-            if ($set_field) {
-                $p->pushField($ob->value);
-            }
-
-            //Create operator's case
-            switch ($ob->operator) {
-                case "contains":
-                case "equals":
-                case "greaterThan":
-                case "lessThan":
-                case "greaterOrEqual":
-                case "lessOrEqual":
-                case "startsWith":
-                case "endsWith":
-                    $startm = "";
-                    $endm = "";
-                    switch ($ob->operator) {
-                        case "contains":
-                            $startm = "%";
-                            $endm = "%";
-                            break;
-                        case "startsWith":
-                            $endm = "%";
-                            break;
-                        case "endsWith":
-                            $startm = "%";
-                            break;
-                    }
-
-                    $opmap = array("contains"=>"LIKE","equals"=>"=","greaterThan"=>">","lessThan"=>"<","greaterOrEqual"=>">=","lessOrEqual"=>"<=","startsWith"=>"LIKE","endsWith"=>"LIKE");
-                    $op = $opmap[$ob->operator];
-
-                    //MySQL comparison is always case insensitive (!)
-                    if ($set_field)
-                        //Case field
-                        $qr = "`".$p->escape($ob->fieldName)."` ".$op." `".$p->escape($ob->value)."`";
-                    elseif (!is_numeric($ob->value) || $case_insensitive || $startm!="" || $endm!="")
-                        //Case string
-                        $qr = "`".$p->escape($ob->fieldName)."` ".$op." '".$startm.$p->escape($ob->value).$endm."'";
-                    else
-                        //Case number
-                        $qr = "`".$p->escape($ob->fieldName)."` ".$op." ".$ob->value;
-
-                    return ($set_not?"NOT (":"") . $qr . ($set_not?")":"");
-                    
-                case "isNull":
-                    return ($set_not?"NOT (":"") . "ISNULL(`".$p->escape($ob->fieldName)."`)" . ($set_not?")":"");
-
-                case "between":
-                case "betweenInclusive":
-                    $lt = $ob->operator=="betweenInclusive" ? "<=" : "<";
-                    $gt = $ob->operator=="betweenInclusive" ? ">=" : ">";
-                    return ($set_not?"NOT (":"") . "((`".$p->escape($ob->fieldName)."`".$gt." ".$ob->start.") AND (`".$p->escape($ob->fieldName)."`".$lt." ".$ob->end."))" . ($set_not?")":"");
-
-                case "regexp":
-                    throw new Exception("regexp not supported.");
-                case "inSet":
-                    throw new Exception("inSet not supported.");
-                default:
-                    throw new Exception("Unknown operator " . $ob->operator);
-            }
-        }
-    }
-
-    /**
-     * Transforms the request object to an SQL statement
-     * @throws Exception Invalid request type or other problem
-     * @param $ob The erquest object
-     * @param $p An object exposing the parameters interface with two methods: 'escape' and 'pushField'
-     * @param string $table The table to operate on
-     * @param string $primary_key The primary key for this table (necessary for every operation other than fetch)
-     * @param array $fields Array with the fields to return (defaults to '*')
-     * @return string The SQL query string
-     */
-    public function toSql($ob, &$p, $table = "users", $primary_key = "id", $fields = array("*")) {
-        if ($ob->operationType != "fetch") {
-            throw new Exception("Only fetch is supported right now");
-        }
-
-        //Parse the where parameters
-        $where = $this->parseWhere($ob->query, $p);
-        if (strlen($where) > 0) {
-            $where = "WHERE " . $where;
-        }
-
-        //Creating ORDER BY statements
-        $order = "";
-        if (property_exists($ob, "sort")) {
-            $order = "ORDER BY ";
-            $prefix = "";
-            foreach ($ob->sort as $k=>$v) {
-                $order .= $prefix . "`" . $k . "` " . $v;
-                $prefix = ",";
-            }
-        }
-
-        //Creating LIMIT statements
-        $limit = "";
-        if ($ob->startRow != 0 || $ob->endRow!=-1) {
-            if (!is_numeric($ob->startRow) || !is_numeric($ob->endRow)) {
-                throw new Exception("Not numeric startRow/endRow");
-            }
-            if ($ob->startRow > $ob->endRow) {
-                throw new Exception("endRow is less than startRow");
-            }
-            $limit = "LIMIT " . $ob->startRow;
-            if ($ob->endRow!=-1) {
-                $limit .= ", " .  ($ob->endRow - $ob->startRow);
-            }
-        }
-
-        //Escape fields
-        $t_fields = array();
-        foreach ($fields as $f) {
-            $t_fields[] = '`'.$p->escape($f).'`';
-        }
-
-        return "SELECT " . implode($t_fields,',') . " FROM `" . $p->escape($table) . "` " . $where . " " . $order . " " . $limit;
     }
 }
