@@ -169,10 +169,11 @@ class sqlparser
      * @param $ob sgrjp_request Array containing the request object ($req[0]) and the required fields ($req[1])
      * @param string $table The name of the table to query
      * @param array $pks the array with the primary keys for the update/delete/add operations
+     * @param bool $auto_increment True if on insert the Primary Key is set by the DB (e.g. autoincrement).
      * @param string $fields String with the fields to return (defaults to '*')
      * @return array The two SQL query strings. The first selects data and the second the count of all data that matches.
      */
-    public static function run($ob, $table, $pks = array(), $fields = "*")
+    public static function run($ob, $table, $pks = array(), $auto_increment = true, $fields = "*")
     {
         // Optionally test that fields in $ob->getFields() exist in the table and that the user has sufficient
         // permissions to edit these tables/fields.
@@ -242,25 +243,30 @@ class sqlparser
                     throw new Exception("Could not successfully run query ($sql) from DB: " . mysql_error());
                 }
 
-                //Get the new object
-                return array(sqlparser::ask("SELECT " . $fields . " FROM `" . $table . "` WHERE " . $where), 1);
+                //Return the new results
+                return sqlparser::run(sgrjp::keyValueToFetchRequest($just_pks), $ob->ds, $pks);
 
             case "add":
+                //In case of auto-increment, only one PrimaryKey is expected
+                if ($auto_increment && count($pks)!=1) {
+                    throw new Exception("Auto-increment with more than on primary key!");
+                }
+
                 //Run the query
                 $sql = "INSERT INTO `" . $table . "` (`" . implode("`,`", array_keys($ob->fields)) . "`) VALUES('" .
-                       implode("','", array_map(" mysql_real_escape_string", $ob->fields)) . "')";
+                       implode("','", array_map("mysql_real_escape_string", $ob->fields)) . "')";
                     
                 if (!mysql_query($sql)) {
                     throw new Exception("Could not successfully run query ($sql) from DB: " . mysql_error());
                 }
 
-                //Extract the Primary Key constraints for this object
-                //$where = sqlparser::parseWhere(sgrjp_request::convertArrayToCriteria($ob->extractPkConstraints($table, $pks, mysql_insert_id())));
+                //Format the response constraint
+                $constraints = $auto_increment ?
+                        array($pks[0] => mysql_insert_id()) : // Autoincrement case. $re contains the last inserted id
+                        array_intersect_key($ob->fields, array_fill_keys($pks, "")); //Otherwise use manually set PK values.
 
-                $where = "`$pks[0]` = LAST_INSERT_ID()";
-
-                //Get the new object
-                return array(sqlparser::ask("SELECT " . $fields . " FROM `" . $table . "` WHERE " . $where), 1);
+                //Return the new results
+                return sqlparser::run(sgrjp::keyValueToFetchRequest($constraints), $ob->ds, $pks);
 
             default:
                 throw new Exception("Operation '" . $ob->operationType . "' is not supported.");
