@@ -27,33 +27,30 @@ require_once(dirname(__FILE__).'/lib/mysql.example.php');
 $ob = new sgrjp();
 
 try {
-    //Retrieve the request object
-    $req = $ob->decodePostAndGet();
-
     //Open a connection
     if (!mysql_connect('localhost', 'root', '')) {
         throw new Exception("Can't open MySQL connection. Wrong username/password?");
     }
 
-    try {
-        //Configure and select db
-        mysql_query("SET CHARACTER SET utf8");
-        mysql_select_db("sgrjp");
+    //Configure and select db
+    mysql_query("SET CHARACTER SET utf8");
 
-        //Convert the request to an SQL query using our example MySQL parser and run
-        $pks = array("ItemsDs"=>array("SKU"), "supplyCategoryDS"=>array("categoryName"));
-        list($ds, $total) = sqlparser::run($req, $req->ds, $pks[$req->ds]);
-        
-        mysql_close();
+    mysql_select_db("sgrjp");
 
-        //Return the results as a properly formatted JSON object
-        $ob->returnResult($ds, $req->startRow, $total);
-    }
-    catch (Exception $e) {
-        mysql_close();
-        throw $e;
-    }
+    $pks = array("ItemsDs"=>array("SKU"), "supplyCategoryDS"=>array("categoryName"));
+
+    //Retrieve the request object
+    $req = $ob->decodePostAndGet();
+
+    //Convert the request to an SQL query using our example MySQL parser and run
+    list($ds, $total) = sqlparser::run($req, $req->ds, $pks[$req->ds], false);
+
+    mysql_close();
+
+    //Return the results as a properly formatted JSON object
+    $ob->returnResult($ds, $req->startRow, $total);
 }
 catch (Exception $e) {
+    mysql_close();
     $ob->returnError($e->getMessage());
 }
