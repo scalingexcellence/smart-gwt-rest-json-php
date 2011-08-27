@@ -434,6 +434,19 @@ class sgrjp
     }
 
     /**
+     * @static
+     * @param $kv The key-value pairs of constraints
+     * @return sgrjp_request The fetch request object with those constraints
+     */
+    public static function keyValueToFetchRequest($kv) {
+        $ob = new sgrjp_request();
+        $ob->operationType = "fetch";
+        $ob->textMatchStyle = "exact";
+        $ob->fields = $kv;
+        return $ob;
+    }
+
+    /**
      * @param $ob Returns a JSON object and terminates
      */
     private function returnObject($ob) {
@@ -491,9 +504,9 @@ class sgrjp
     public function returnResult($ob, $start, $total) {
         $o = new stdClass();
         $o->response->status = 0;
-        $o->response->startRow = $start;
-        $o->response->endRow = $start + count($ob);
-        $o->response->totalRows = $total;
+        $o->response->startRow = (int)($start);
+        $o->response->endRow = (int)($start + count($ob));
+        $o->response->totalRows = (int)($total);
         $o->response->data = $ob;
         $this->returnObject($o);
     }
