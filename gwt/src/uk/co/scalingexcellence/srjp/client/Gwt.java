@@ -133,8 +133,8 @@ public class Gwt implements EntryPoint {
 		supply.setDataURL("api/");
 
 		//Enable POST data
-		//dataSource.setDataProtocol(DSProtocol.POSTPARAMS);
-		//supply.setDataProtocol(DSProtocol.POSTPARAMS);
+		dataSource.setDataProtocol(DSProtocol.POSTPARAMS);
+		supply.setDataProtocol(DSProtocol.POSTPARAMS);
 		
 
 		//final TreeGrid listGrid = new TreeGrid() {
