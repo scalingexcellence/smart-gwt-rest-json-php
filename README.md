@@ -63,6 +63,5 @@ npm run dev
 ## Version 1.0,   30/10/2024
 
 ## Contact
-[email](jason0614.dev@gmail.com)
 
-[Telegram](https://t.me/crypto_0614)
+[Telegram](https://t.me/plzbugmenot)
