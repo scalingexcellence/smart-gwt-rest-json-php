@@ -64,4 +64,5 @@ npm run dev
 
 ## Contact
 
+[Email](plzbugmenot.dev@gmail.com)
 [Telegram](https://t.me/plzbugmenot)
